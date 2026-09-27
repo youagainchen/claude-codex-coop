@@ -239,11 +239,15 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(sidebar.run_partner({"agent_settings": {"model": "gpt-x", "effort": "high"}}), "codex")
         self.assertEqual(sidebar.run_partner({"agent_settings": {"codex": {}, "claude": {}}}), "both")
 
-    def test_claude_partner_cannot_be_asked_to_implement(self):
+    def test_claude_partner_implement_runs_with_edit_permission(self):
         with tempfile.TemporaryDirectory() as tmp:
             bridge = self.make_bridge(Path(tmp), allow_write=True, host_agent="codex")
-            with self.assertRaisesRegex(ValueError, "只做分析与审查"):
-                bridge.start_workflow({"task": "改代码", "mode": "implement", "approved_decision": "已批准"})
+            stdout = self._claude_stream({"type": "result", "is_error": False, "result": "完成"})
+            with patch.object(bridge, "executable", return_value="claude"),                     patch.object(bridge, "_run_process", return_value=(stdout, "")) as run:
+                bridge.run_claude("改代码", Path(tmp), writable=True)
+                self.assertEqual(run.call_args.args[0][run.call_args.args[0].index("--permission-mode") + 1], "acceptEdits")
+                bridge.run_claude("看代码", Path(tmp))
+                self.assertEqual(run.call_args.args[0][run.call_args.args[0].index("--permission-mode") + 1], "plan")
 
     def test_partner_claude_not_logged_in_explains_how_to_fix(self):
         with tempfile.TemporaryDirectory() as tmp:

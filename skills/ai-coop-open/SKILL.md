@@ -38,6 +38,6 @@ If the partner is Claude and its CLI is not logged in (the panel or an error say
 
 **分歧**：只有影响结论的分歧才处理。先写成"冲突主张—各自依据—可执行的区分性检验—通过标准"，只针对它追加一轮；**每个任务最多两轮**（初轮 + 一次追问）。检验做不了或两轮后仍有分歧，就停止，把不确定性、可行的下一步和需要用户决定的地方告诉用户。
 
-**权限**：analyze、decide、review 始终只读。implement 仅在用户对具体改动已授权、任务包附上已批准决定（`approved_decision`）且协作方可写时使用；协作方是 Claude 时只读，改为让它给方案、由主协调自己实施。收到实施结果后，主协调要复核实际改动和验证结果再向用户汇总。保留用户明确指定的模型、推理强度和权限要求；协作 AI 不得再次调用 AI Coop。
+**权限**：analyze、decide、review 始终只读。implement 仅在用户对具体改动已授权、任务包附上已批准决定（`approved_decision`）时使用，Codex 与 Claude 作为协作方都可以执行实施。收到实施结果后，主协调要复核实际改动和验证结果再向用户汇总。保留用户明确指定的模型、推理强度和权限要求；协作 AI 不得再次调用 AI Coop。
 
 如用户要求关闭自动协作，调用 `set_collaboration_mode`，`enabled: false`。

@@ -897,6 +897,7 @@ class Bridge:
         workspace: Path,
         model: str = DEFAULT_CLAUDE_MODEL,
         effort: str = "medium",
+        writable: bool = False,
     ) -> tuple[str, dict[str, Any]]:
         empty_mcp = json.dumps({"mcpServers": {}}, separators=(",", ":"))
         argv = [
@@ -904,7 +905,8 @@ class Bridge:
             *claude_official_args(workspace),
             "-p",
             "--permission-mode",
-            "plan",
+            # 实施任务允许编辑文件（与 Codex 的 workspace-write 对应）；其余模式只读规划。
+            "acceptEdits" if writable else "plan",
             "--output-format",
             "stream-json",
             "--verbose",
@@ -918,7 +920,12 @@ class Bridge:
         ]
         guarded_prompt = (
             prompt
-            + "\n\n安全边界：只分析和审查，不修改文件；不要调用其他 AI 或 MCP 工具。"
+            + (
+                "\n\n安全边界：只修改完成本轮已批准任务所需的文件；不要提交、推送、合并或删除材料；"
+                "不要调用其他 AI 或 MCP 工具。"
+                if writable
+                else "\n\n安全边界：只分析和审查，不修改文件；不要调用其他 AI 或 MCP 工具。"
+            )
         )
         stdout, _ = self._run_process(argv, guarded_prompt, workspace, agent="claude",
                                       drop_env=_host_env_var)
@@ -1397,13 +1404,8 @@ class Bridge:
         if mode == "implement":
             if not decision:
                 raise ValueError("implement 模式必须提供 approved_decision")
-            if partner == "claude":
-                raise ValueError(
-                    "协作 AI 为 Claude 时只做分析与审查，不能执行 implement；"
-                    "请改用 review/decide 让 Claude 给出方案，由主协调 AI 自行实施。"
-                )
-            if partner == "codex" and not self.allow_write:
-                raise PermissionError("Codex 协作写入未启用；请重新安装并启用 AllowWrite。")
+            if not self.allow_write:
+                raise PermissionError("写入已被全局关闭（安装时使用了 -ReadOnly）；重新安装且不带 -ReadOnly 即可。")
         legacy_model = arguments.get("codex_model") if partner == "codex" else arguments.get("claude_model")
         legacy_effort = arguments.get("codex_effort") if partner == "codex" else arguments.get("claude_effort")
         if selection == "auto":
@@ -1444,6 +1446,7 @@ class Bridge:
                 final, usage = self.run_claude(
                     base,
                     project,
+                    writable=(mode == "implement"),
                     model=partner_model,
                     effort=partner_effort,
                 )
