@@ -331,9 +331,9 @@ class PanelHandler(BaseHTTPRequestHandler):
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                 raise ValueError("JSON required")
             size = int(self.headers.get("Content-Length", "0"))
-            if not 0 < size <= 8192:
+            if not 0 <= size <= 8192:
                 raise ValueError("Invalid request size")
-            data = json.loads(self.rfile.read(size))
+            data = json.loads(self.rfile.read(size) or b"{}")
             if not isinstance(data, dict):
                 raise ValueError("JSON object required")
             with self.server.lock:
@@ -341,6 +341,10 @@ class PanelHandler(BaseHTTPRequestHandler):
                     if set(data) - {"partner_selection", "partner_model", "partner_effort"}:
                         raise ValueError("Unknown preference")
                     result = self.server.bridge.set_partner_preferences({**data, "primary_agent": self.server.primary})
+                elif self.path == "/api/shutdown":
+                    self.reply(200, {"ok": True})
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return
                 elif self.path == "/api/mode":
                     if set(data) != {"enabled"}:
                         raise ValueError("enabled required")
@@ -367,6 +371,33 @@ def healthy_session(record, workspace):
         return False
 
 
+def retire_old_panels(folder, keep, workspace, primary):
+    """面板常驻不闲置退出；为免进程累积，启动新版面板前请同一工作区、同一端的旧面板自行退出。
+
+    通过旧面板自己的 /api/shutdown（需其令牌）通知，而不是按 pid 结束进程，避免误伤复用了 pid 的其他程序。
+    """
+    for other in folder.glob("*.json"):
+        if other == keep:
+            continue
+        try:
+            record = json.loads(other.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if record.get("workspace") != str(workspace) or record.get("primary") != primary:
+            continue
+        try:
+            request = Request(record["url"].split("#")[0] + "api/shutdown", data=b"{}", method="POST",
+                              headers={"Authorization": "Bearer " + record["token"],
+                                       "Content-Type": "application/json"})
+            build_opener(ProxyHandler({})).open(request, timeout=2).close()
+        except (OSError, ValueError, KeyError):
+            pass
+        try:
+            other.unlink()
+        except OSError:
+            pass
+
+
 def ensure_panel(bridge, workspace, primary):
     workspace = Path(workspace).resolve()
     # New code gets a new process; each panel remains bound to its own workspace.
@@ -384,6 +415,7 @@ def ensure_panel(bridge, workspace, primary):
             return {"url": record["url"], "workspace": str(workspace), "placement": "right"}
     except (OSError, ValueError):
         pass
+    retire_old_panels(folder, state_file, workspace, primary)
     args = [sys.executable, str(Path(__file__).resolve()), "--serve", "--workspace", str(workspace),
             "--runs-dir", str(bridge.runs_dir), "--host-agent", primary, "--state-file", str(state_file)]
     if bridge.allow_write:
@@ -422,12 +454,11 @@ def main():
         print(json.dumps(ensure_panel(bridge, workspace, args.host_agent), ensure_ascii=False))
         return
     server = PanelServer(bridge, workspace, args.host_agent)
-    record = {"url": server.origin + "/#" + server.token, "token": server.token, "pid": os.getpid()}
+    record = {"url": server.origin + "/#" + server.token, "token": server.token, "pid": os.getpid(),
+              "workspace": str(workspace), "primary": args.host_agent}
     args.state_file.write_text(json.dumps(record), encoding="utf-8")
-    server.timeout = 1
     try:
-        while time.monotonic() - server.last_activity < 3600:
-            server.handle_request()
+        server.serve_forever(poll_interval=0.5)  # 常驻：面板关掉也保留，下次打开立即可用
     finally:
         server.server_close()
         try:

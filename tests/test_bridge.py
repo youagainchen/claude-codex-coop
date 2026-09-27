@@ -183,7 +183,9 @@ class BridgeTests(unittest.TestCase):
             payload = json.loads(active.stdout)
             context = payload["hookSpecificOutput"]["additionalContext"]
             self.assertIn("start_workflow", context)
-            self.assertIn("Do not ask the user", context)
+            self.assertIn("不要让用户输入 workflow", context)
+            self.assertIn("任务包", context)
+            self.assertTrue(active.stdout.isascii())  # 宿主按 UTF-8 读取，输出须与代码页无关
 
             env["AI_COOP_NESTED"] = "1"
             nested = subprocess.run(
@@ -236,6 +238,12 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(sidebar.run_partner({"agent_settings": {"agent": "claude", "model": "opus"}}), "claude")
         self.assertEqual(sidebar.run_partner({"agent_settings": {"model": "gpt-x", "effort": "high"}}), "codex")
         self.assertEqual(sidebar.run_partner({"agent_settings": {"codex": {}, "claude": {}}}), "both")
+
+    def test_claude_partner_cannot_be_asked_to_implement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bridge = self.make_bridge(Path(tmp), allow_write=True, host_agent="codex")
+            with self.assertRaisesRegex(ValueError, "只做分析与审查"):
+                bridge.start_workflow({"task": "改代码", "mode": "implement", "approved_decision": "已批准"})
 
     def test_partner_claude_not_logged_in_explains_how_to_fix(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -44,18 +44,15 @@ def main() -> int:
         return 0
 
     context = (
-        "AI Coop automatic collaboration is enabled. For each substantive user task, the AI in "
-        "this native chat is the primary coordinator: form an initial view, call AI Coop's "
-        "start_workflow exactly once with the absolute path of the workspace currently open in "
-        "this chat to ask the other AI, poll the same run_id with get_run_status "
-        "until completion, then give one integrated answer. Continue another round only when a "
-        "material disagreement remains. Do not ask the user to type or invoke 'workflow'. Do not "
-        "start a partner run for greetings, connection/status checks, model-setting changes, or a "
-        "request to disable AI Coop. Preserve normal approval and write-safety requirements. "
-        "In the Claude desktop app, if the AI Coop panel is not already open in the built-in "
-        "browser pane in this conversation, call open_sidebar and open its URL with the browser "
-        "pane's preview_start before the first start_workflow, so the user sees the partner model, "
-        "reasoning effort and run state."
+        "AI Coop 已启用，当前聊天的 AI 是主协调。先判断本任务是否值得协作：问候、状态或设置操作、"
+        "简单且证据充分的回答、用户要求停止协作时不发起调用。需要协作时先独立形成初判，"
+        "再调用一次 start_workflow（显式选择 analyze/decide/review/implement，workspace 用当前聊天工作区的绝对路径），"
+        "task 写成任务包：目标、已知及来源、你的初判、最多三个具体问题、验收标准、禁止事项。"
+        "轮询同一 run_id 至完成，逐项核对对方依据后整合回答，区分已证实/待验证/建议。"
+        "只有影响结论的分歧才追加一轮针对性检验，每个任务最多两轮。"
+        "implement 需要用户对具体改动的授权并附已批准决定；不要让协作 AI 再次调用 AI Coop；不要让用户输入 workflow。"
+        "在 Claude 桌面版中，若本对话还没在内置浏览器面板打开 AI Coop 面板，"
+        "先调用 open_sidebar 并用浏览器面板的 preview_start 打开其 URL，再发起第一次 start_workflow。"
     )
     print(
         json.dumps(
@@ -65,7 +62,8 @@ def main() -> int:
                     "additionalContext": context,
                 }
             },
-            ensure_ascii=False,
+            # 输出纯 ASCII（中文转义）：Windows 管道默认按系统代码页写出，宿主按 UTF-8 读取会乱码。
+            ensure_ascii=True,
         )
     )
     return 0

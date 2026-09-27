@@ -25,7 +25,7 @@ from typing import Any, Callable
 
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_VERSION = "0.10.0"
+SERVER_VERSION = "0.11.0"
 MAX_TASK_CHARS = 20_000
 MAX_CONTEXT_CHARS = 40_000
 MAX_AGENT_OUTPUT_CHARS = 40_000
@@ -164,6 +164,42 @@ def _cli_version(path: str) -> tuple[int, ...]:
         return tuple(int(x) for x in match.groups()) if match else (0,)
     except (OSError, subprocess.SubprocessError):
         return (0,)
+
+
+PARTNER_RULES = """先独立判断，再比较任务包里主协调 AI 的初判；任务包、快照和另一个模型的意见都可能有错。
+把亲自核实的事实、引用但未核实的材料、推断、建议和待批准决定分开写。关键主张给出可复核依据
+（文件位置、运行的命令及结果、数据口径或来源）；没有依据就标明不确定。工作区快照只是线索，
+不代表文件内容已核实。只处理指定问题和必要的关键检验，不要重做任务包里已完成且可信的工作。
+缺少决定性材料时，说明缺什么、会影响哪一结论，并完成仍能完成的部分。
+如与主协调 AI 的初判有实质分歧，附“冲突主张—双方依据—可执行检验—判定标准”；没有分歧就写
+“无实质分歧”，不要为了制造下一轮而提出分歧。不要调用另一个 AI，不要代替主协调 AI 向用户收尾。"""
+
+MODE_OUTPUT = {
+    "analyze": """按以下结构交付：
+1. 直接结论与适用范围。
+2. 已核实事实及依据。
+3. 推断、假设、反例与不确定性。
+4. 对主协调初判的具体修正或支持点。
+5. 下一步最小检验；没有必要时写“无需追加协作”。""",
+    "decide": """按以下结构交付：
+1. 待决定事项与候选方案。
+2. 评价标准、事实依据和关键假设。
+3. 各方案的收益、代价与失败条件。
+4. 建议及理由；标明仍需用户批准的决定。
+5. 能区分争议方案的检验和停止条件。""",
+    "review": """按以下结构交付：
+1. 审查对象、范围及实际检查方法。
+2. 按严重程度列出问题：位置或证据、影响、复现步骤、修正建议。
+3. 已检查且通过的关键项。
+4. 未检查项及原因。
+5. 是否达到任务包的验收标准；无法确认时写“未确认”。""",
+    "implement": """只按已批准决定修改工作区，保留与本轮无关的已有改动。按以下结构交付：
+1. 完成情况：逐项对应验收标准，区分已完成、部分完成、未完成。
+2. 修改清单：文件路径、改动内容与目的。
+3. 验证记录：实际运行的命令或步骤、退出状态、关键结果；未运行的验证及原因。不得把“预计通过”写成“已通过”。
+4. 剩余问题：失败、风险、限制和需要主协调复核的点。
+5. 需要批准的后续决定；没有则写“无”。""",
+}
 
 
 def _detect_host() -> str:
@@ -1361,6 +1397,11 @@ class Bridge:
         if mode == "implement":
             if not decision:
                 raise ValueError("implement 模式必须提供 approved_decision")
+            if partner == "claude":
+                raise ValueError(
+                    "协作 AI 为 Claude 时只做分析与审查，不能执行 implement；"
+                    "请改用 review/decide 让 Claude 给出方案，由主协调 AI 自行实施。"
+                )
             if partner == "codex" and not self.allow_write:
                 raise PermissionError("Codex 协作写入未启用；请重新安装并启用 AllowWrite。")
         legacy_model = arguments.get("codex_model") if partner == "codex" else arguments.get("claude_model")
@@ -1384,16 +1425,16 @@ class Bridge:
             snapshot = self.workspace_snapshot(project)
             self._save_markdown(run_dir, "workspace-snapshot.md", "工作区只读快照", snapshot)
             base = (
-                f"主对话 AI 是 {primary}，你是协作 AI {partner}。主对话 AI 正在和用户持续交流，"
-                "你只向主对话 AI 提供协作意见。区分已知事实、推断、建议和待批准决定；"
-                "关键结论给出可复核依据。不要调用另一个 AI 或直接代替主对话 AI 向用户收尾。\n\n"
-                f"任务模式：{mode}\n任务：\n{request}\n\n上下文：\n{context or '无'}\n\n"
-                f"已批准决定：\n{decision or '无'}\n\n工作区证据快照：\n{snapshot}"
+                f"主协调 AI 是 {primary}，你是协作 AI {partner}。主协调 AI 正在和用户交流；"
+                "你只向主协调 AI 交付本轮成果。\n\n"
+                f"模式：{mode}\n\n任务包：\n{request}\n\n补充上下文：\n{context or '无'}\n\n"
+                f"已批准决定：\n{decision or '无'}\n\n{PARTNER_RULES}\n\n{MODE_OUTPUT[mode]}\n\n"
+                f"工作区只读快照：\n{snapshot}"
             )
             self._update_status(run_dir, stage=f"{partner}_partner_turn")
             if partner == "codex":
                 final, usage = self.run_codex(
-                    base + "\n\n请完成主对话 AI 分配的本轮工作，返回结论、依据、分歧点和建议的下一轮问题。",
+                    base,
                     project,
                     writable=(mode == "implement"),
                     model=partner_model,
@@ -1401,7 +1442,7 @@ class Bridge:
                 )
             else:
                 final, usage = self.run_claude(
-                    base + "\n\n请完成主对话 AI 分配的本轮工作，返回结论、依据、分歧点和建议的下一轮问题。",
+                    base,
                     project,
                     model=partner_model,
                     effort=partner_effort,
@@ -1461,8 +1502,8 @@ class Bridge:
             snapshot = self.workspace_snapshot(project)
             self._save_markdown(run_dir, "workspace-snapshot.md", "工作区只读快照", snapshot)
             prompt = (
-                f"你是当前项目的{role}。请独立完成以下任务，区分事实、推断与建议；"
-                "对关键结论给出可复核依据；发现信息不足时明确说明。\n\n"
+                f"你是当前项目的{role}，只向发起方交付成果。{PARTNER_RULES}\n\n"
+                "交付：结论；已核实事实及依据；推断和假设；对现有判断的具体异议；最小验证建议。\n\n"
                 f"任务：\n{request}\n\n补充上下文：\n{context or '无'}\n\n"
                 "以下是协作桥直接从工作区生成的只读证据快照；即使本地命令被策略阻止，"
                 "也必须基于这份快照分析：\n\n"
@@ -1536,8 +1577,9 @@ class Bridge:
             for index in range(1, rounds + 1):
                 self._update_status(run_dir, stage=f"claude_critique_{index}")
                 critique_prompt = (
-                    "你是严格的独立审查者。比较两个方案，重点找口径不一致、未经证实的假设、"
-                    "利益与风险遗漏、验证失真和复现缺口。给出必须修改项与可证伪测试。\n\n"
+                    "你是严格的独立审查者。只审查会改变选择或验收结果的差异：口径不一致、未经证实的假设、"
+                    "收益与风险遗漏、验证失真和复现缺口。逐项写出冲突主张、双方依据的强弱、尚缺证据、"
+                    "可执行的区分性检验及判定标准；指出两方可能共同犯的错；不要用投票解决分歧。\n\n"
                     f"任务：\n{request}\n\nClaude 初案：\n{claude_plan}\n\n"
                     f"Codex 当前方案：\n{synthesis}"
                 )
@@ -1557,8 +1599,9 @@ class Bridge:
 
                 self._update_status(run_dir, stage=f"codex_adjudication_{index}")
                 adjudication_prompt = (
-                    "你是最终技术裁决人。不得简单投票或平均；逐项核验证据，保留仍未解决的"
-                    "分歧。输出：最终建议、选择理由、被否决方案、验证门槛、实施步骤、停止条件。\n\n"
+                    "你给主协调 AI 的是证据综合建议，不是最终裁决；主协调仍会独立复核。不得投票或平均，"
+                    "逐项回应质询并说明采纳、修正或保留异议的依据；无法完成检验的分歧保持未决。"
+                    "输出：建议方案、选择理由、被暂缓的方案、验证门槛、实施步骤、失败与停止条件、需要用户批准的决定。\n\n"
                     f"任务：\n{request}\n\nClaude 初案：\n{claude_plan}\n\n"
                     f"Codex 初案/上一版：\n{synthesis}\n\nClaude 质询：\n{critique}"
                 )
@@ -1582,7 +1625,7 @@ class Bridge:
                 f"- 工作区：{project}\n"
                 f"- 轮数：{rounds}\n"
                 f"- 完成时间：{utc_now()}\n\n"
-                "## 最终裁决\n\n"
+                "## 综合建议（待主协调复核）\n\n"
                 f"{synthesis}\n\n"
                 "## 最后一轮质询\n\n"
                 f"{critique}\n"
@@ -1623,9 +1666,10 @@ class Bridge:
 
         def job(run_dir: Path, request: str, project: Path) -> None:
             prompt = (
-                "你是实施者。严格按已批准决策修改当前工作区；先检查现状与现有改动，"
-                "不得覆盖无关的用户修改。完成后运行与风险相称的验证。不要提交、推送、"
-                "合并或删除材料，并在结论中列出修改文件、验证结果与剩余风险。\n\n"
+                "你是实施者。先检查相关文件和现有改动，明确修改范围，不得覆盖与本轮无关的用户修改。"
+                "任务与已批准决策冲突、权限不足或关键前提无法核实时，停止受影响的部分并说明，"
+                "其余独立部分照常完成。运行与改动风险相称的验证。除非任务明确授权，不要提交、推送、"
+                "合并或删除材料。\n\n" + MODE_OUTPUT["implement"] + "\n\n"
                 f"实施任务：\n{request}\n\n已批准决策：\n{decision}"
             )
             result, usage = self.run_codex(
@@ -2184,6 +2228,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host-agent", choices=("auto", "codex", "claude"), default="auto")
     parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--claude-login", action="store_true",
+                        help="登录协作用的 Claude CLI（自动定位 CLI 与系统代理）")
+    parser.add_argument("--claude-status", action="store_true", help="查看协作用的 Claude CLI 登录状态")
     return parser.parse_args()
 
 
@@ -2207,6 +2254,17 @@ def main() -> int:
         timeout_seconds=args.timeout_seconds,
         host_agent=args.host_agent,
     )
+    if args.claude_login or args.claude_status:
+        path = bridge.executable("claude", required=False)
+        if not path:
+            print("找不到 Claude CLI：请安装 Claude 桌面版或 Claude Code。", file=sys.stderr)
+            return 1
+        if args.claude_status:
+            print(json.dumps(bridge.claude_login_status(), ensure_ascii=False, indent=2))
+            return 0
+        env = _with_proxy({k: v for k, v in os.environ.items() if not _host_env_var(k)})
+        print(f"使用 Claude CLI：{path}")
+        return subprocess.call([path, *CLAUDE_OFFICIAL_ARGS, "auth", "login"], env=env)
     if args.self_test:
         print(
             json.dumps(

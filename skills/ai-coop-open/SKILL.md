@@ -17,13 +17,27 @@ In hosts without either pane tool, keep using `show_partner_selector` once as th
 
 If the health check fails, report the failing CLI or path instead of creating a workflow run. Do not call `start_workflow` until the user provides an actual collaboration task.
 
-For each later substantive task while collaboration is enabled:
+If the partner is Claude and its CLI is not logged in (the panel or an error says so), tell the user to run `scripts/claude-login.ps1` from the plugin folder once; do not start runs until then.
 
-1. The AI in the current native chat remains the primary coordinator. Form an initial view.
-2. Call `start_workflow` once with the absolute path of the workspace currently open in this native chat. The bridge automatically selects the other AI and its saved or automatic model settings.
-3. Unless the user explicitly requests only the `run_id`, poll that same run with `get_run_status` until it completes.
-4. Read the partner result and give one integrated answer. Start another round only when a material disagreement remains.
+## 协作协议（自动协作开启后的每个任务）
 
-Do not start a partner run for greetings, connection/status checks, model-setting changes, or a request to close or disable AI Coop. If the user asks to disable automatic collaboration, call `set_collaboration_mode` with `enabled: false`.
+当前聊天里的 AI 始终是**主协调**：理解用户意图与授权、划定任务、复核证据、给出最终回答。协作 AI 只交付本轮指定的成果，不接管对话。按任务需要分工，而不是按模型名字假定谁更可靠：需要检查仓库、运行代码、复现或实现时，交给具备相应工具和权限的一方；需要论证结构、反例、审稿或表达时，可交给另一方。两方意见一致不等于正确。
 
-Preserve explicit model and effort requests. Implementation still requires the user's concrete authorization and write mode; do not broaden permissions merely because collaboration is enabled. Nested agents must not invoke AI Coop again.
+**何时调用**：只有当独立核查可能改变关键结论、任务需要另一方的工具或专长，或用户明确要求协作时才调用。问候、状态查询、设置操作、简单且证据充分的回答，以及用户要求停止协作时，不发起调用。
+
+**调用前**：先独立形成自己的初判，再调用一次 `start_workflow`，明确选择 `mode`（analyze / decide / review / implement，不依赖默认值），`workspace` 用当前聊天工作区的绝对路径。`task` 写成任务包：
+
+- **目标**：本轮要交付什么，在用户任务中用来做什么。
+- **已知**：已核实的事实及来源或文件位置；未经核实的标为"待核"。
+- **我的初判**：当前结论、依据、信心，以及最担心的反例。要求对方先独立判断，再与之比较。
+- **具体问题**：最多三个，指出需要补的盲点；说明已完成的工作，避免重复。
+- **验收标准**：成果形式、需要的可复核依据与检验、停止条件。
+- **禁止事项**：权限边界、不得触碰的范围、需另行批准的操作。
+
+**调用后**：用 `get_run_status` 轮询同一个 `run_id` 直到完成（除非用户只要 `run_id`）。逐项核对关键依据、实际文件或运行结果，检查对方是否回答了任务包里的问题，并重新审视自己的初判。回答用户时区分"已证实 / 待验证 / 仅为建议"，说明协作方贡献了什么、有哪些分歧；不要把对方的文字直接当最终结论。
+
+**分歧**：只有影响结论的分歧才处理。先写成"冲突主张—各自依据—可执行的区分性检验—通过标准"，只针对它追加一轮；**每个任务最多两轮**（初轮 + 一次追问）。检验做不了或两轮后仍有分歧，就停止，把不确定性、可行的下一步和需要用户决定的地方告诉用户。
+
+**权限**：analyze、decide、review 始终只读。implement 仅在用户对具体改动已授权、任务包附上已批准决定（`approved_decision`）且协作方可写时使用；协作方是 Claude 时只读，改为让它给方案、由主协调自己实施。收到实施结果后，主协调要复核实际改动和验证结果再向用户汇总。保留用户明确指定的模型、推理强度和权限要求；协作 AI 不得再次调用 AI Coop。
+
+如用户要求关闭自动协作，调用 `set_collaboration_mode`，`enabled: false`。
