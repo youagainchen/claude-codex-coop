@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.backup-*
+# 本地运行数据（插件默认写到 ~/.ai-coop，这里防止误放进仓库）
+.ai-coop/
+runs/
+panels/
+preferences.json

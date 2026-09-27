@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "ai-coop": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "./server/mcp_server.py",
+        "--host-agent",
+        "codex"
+      ]
+    }
+  }
+}

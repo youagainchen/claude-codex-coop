@@ -1,0 +1,27 @@
+{
+  "name": "ai-coop",
+  "version": "0.10.0+codex.20260927170922",
+  "description": "Open once, then let Codex and Claude collaborate automatically in the native chat.",
+  "author": {
+    "name": "AI Coop contributors"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "AI Coop",
+    "shortDescription": "Open once; later tasks automatically use the other AI.",
+    "longDescription": "Open AI Coop once in the native Codex or Claude chat. The current AI then coordinates the other AI automatically; the compact selector is only for optional partner model and effort overrides.",
+    "developerName": "AI Coop contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use $ai-coop-open to open automatic Claude × Codex collaboration.",
+      "Open AI Coop; after that I will describe tasks normally."
+    ],
+    "brandColor": "#3157D5"
+  }
+}

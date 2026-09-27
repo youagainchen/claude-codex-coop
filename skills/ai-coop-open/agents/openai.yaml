@@ -1,0 +1,10 @@
+{
+  "interface": {
+    "display_name": "打开 AI Coop",
+    "short_description": "打开一次，后续任务自动调用另一端 AI 协作",
+    "default_prompt": "使用 $ai-coop-open 打开自动协作；之后我会直接描述任务。"
+  },
+  "policy": {
+    "allow_implicit_invocation": true
+  }
+}

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN" data-bg="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Coop</title>
+  <link rel="stylesheet" href="/sidebar.css">
+  <script src="/background.js" defer></script>
+  <script src="/sidebar.js" defer></script>
+</head>
+<body>
+  <div class="veil" aria-hidden="true"></div>
+  <main>
+    <header>
+      <div class="title">
+        <svg class="logo" viewBox="0 0 30 30" aria-hidden="true"><rect class="logo-bg" width="30" height="30" rx="9"/><path class="logo-arc" d="M9 19.5C10.5 10 19.5 10 21 19.5"/><circle class="logo-a" cx="9" cy="20" r="3"/><circle class="logo-b" cx="21" cy="20" r="3"/></svg>
+        <div><h1>AI Coop</h1><span id="connection" class="conn">连接中</span></div>
+      </div>
+      <div class="actions">
+        <button id="bgButton" class="icon-btn" type="button" aria-label="切换背景" aria-expanded="false" title="切换背景">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5a7.5 7.5 0 1 0 0 15c1 0 1.6-.7 1.6-1.5 0-.4-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5h1.8a3.4 3.4 0 0 0 3.4-3.4C17.5 5.5 14.1 2.5 10 2.5Z"/><circle cx="6.2" cy="9" r="1.1"/><circle cx="8.6" cy="5.9" r="1.1"/><circle cx="12.4" cy="5.9" r="1.1"/></svg>
+        </button>
+        <button id="enabled" class="switch" role="switch" aria-label="自动协作" aria-checked="false" disabled title="自动协作"><span></span></button>
+      </div>
+    </header>
+    <div id="bgMenu" class="glass bg-menu" role="radiogroup" aria-label="背景" hidden></div>
+
+    <div id="error" class="glass" role="alert" hidden></div>
+
+    <section id="now" class="glass now idle">
+      <div class="now-head"><span id="nowLabel" class="eyebrow">协作伙伴</span><span id="nowState" class="pill">空闲</span></div>
+      <strong id="nowAgent" class="agent">—</strong>
+      <div class="chips"><span id="nowModel" class="chip">—</span><span id="nowEffort" class="chip chip-accent">—</span></div>
+      <div id="usage" class="usage" hidden></div>
+      <p id="nowMeta" class="meta">在左侧聊天里描述任务，调用时这里会实时显示。</p>
+      <div class="progress" aria-hidden="true"><span></span></div>
+    </section>
+
+    <section class="glass">
+      <div class="row-head"><h2>下一次调用</h2><span id="saveStatus" class="save-status" role="status"></span></div>
+      <div class="segmented" role="radiogroup" aria-label="模型选择方式">
+        <button type="button" data-sel="auto" role="radio" aria-checked="true">自动</button>
+        <button type="button" data-sel="manual" role="radio" aria-checked="false">手动指定</button>
+      </div>
+      <p id="autoHint" class="hint">主协调按任务类型挑选模型与推理强度。</p>
+      <p id="loginHint" class="hint warn" hidden></p>
+      <div id="manual" hidden>
+        <label for="model">模型</label>
+        <div class="select-wrap"><select id="model"></select></div>
+        <input id="customModel" placeholder="输入完整模型 ID" autocomplete="off" hidden>
+        <label>推理强度</label>
+        <div id="efforts" class="efforts" role="radiogroup" aria-label="推理强度"></div>
+        <p id="modelHint" class="hint"></p>
+      </div>
+    </section>
+
+    <section class="glass history">
+      <div class="row-head"><h2>最近调用</h2><span id="count" class="muted"></span></div>
+      <ol id="runs"></ol>
+    </section>
+
+    <section id="detail" class="glass detail" hidden>
+      <div class="detail-head">
+        <button id="detailBack" class="back" type="button" aria-label="返回"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg></button>
+        <div class="detail-title"><strong id="detailAgent">—</strong><span id="detailMeta" class="muted"></span></div>
+        <span id="detailState" class="pill"></span>
+      </div>
+      <details class="task"><summary>任务</summary><p id="detailTask"></p></details>
+      <ol id="transcript" class="transcript"></ol>
+    </section>
+
+    <footer><span id="workspacePath"></span><span id="access"></span></footer>
+  </main>
+</body>
+</html>

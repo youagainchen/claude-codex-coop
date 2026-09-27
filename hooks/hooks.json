@@ -1,0 +1,18 @@
+{
+  "description": "Keep AI Coop automatic after the user opens it once.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/auto-collab-hook.py\"",
+            "commandWindows": "python \"${CLAUDE_PLUGIN_ROOT}\\scripts\\auto-collab-hook.py\"",
+            "timeout": 5,
+            "statusMessage": "AI Coop"
+          }
+        ]
+      }
+    ]
+  }
+}
