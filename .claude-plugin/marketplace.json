@@ -1,0 +1,17 @@
+{
+  "name": "claude-codex-coop",
+  "owner": {
+    "name": "youagainchen"
+  },
+  "metadata": {
+    "description": "Let the AI you're chatting with call the other one (Claude ⇄ Codex) to cross-check, review or implement, with a live side panel."
+  },
+  "plugins": [
+    {
+      "name": "ai-coop",
+      "source": "./",
+      "description": "Let the AI you're chatting with call the other one (Claude ⇄ Codex) to cross-check, review or implement, with a live side panel.",
+      "category": "productivity"
+    }
+  ]
+}

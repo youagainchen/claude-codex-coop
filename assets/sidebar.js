@@ -1,6 +1,8 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const token = location.hash.slice(1);
+  // 地址形如 #<令牌>&bg=aurora&run=<run_id>：令牌之后的参数可直接指定背景或打开某次调用。
+  const [token, ...hashRest] = location.hash.slice(1).split('&');
+  const hashParams = new URLSearchParams(hashRest.join('&'));
   const NAMES = {codex: 'Codex', claude: 'Claude'};
   const STATES = {queued: '排队', running: '运行中', completed: '完成', failed: '失败'};
   const KINDS = {routed_workflow: '协作', consultation: '咨询', debate: '辩论', implementation: '实施'};
@@ -169,7 +171,15 @@
     const hint = $('loginHint');
     const login = data.claude_login;
     hint.hidden = !(data.partner_agent === 'claude' && login && !login.logged_in);
-    if (!hint.hidden) hint.replaceChildren('命令行还没登录 Claude。在终端运行 ', el('code', '', 'claude auth login'), '，用与 Claude App 相同的账号登录一次即可。');
+    if (hint.hidden) return;
+    const btn = el('button', 'login-btn', '登录 Claude CLI');
+    btn.type = 'button';
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { await api('claude-login', {}); btn.textContent = '已打开登录窗口，完成浏览器授权后稍等'; }
+      catch (e) { showError(e); btn.disabled = false; }
+    };
+    hint.replaceChildren('Claude CLI 尚未登录，用与 Claude 桌面版相同的账号登录一次即可。', btn);
   }
   function renderSettings() {
     const models = data.partner.models;
@@ -269,8 +279,9 @@
       if (h) { out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
       if (/^\s*([-*]|\d+\.)\s+/.test(line)) {
         const ordered = /^\s*\d+\./.test(line), items = [];
+        const start = ordered ? parseInt(line, 10) : 1;  // 条目之间隔着段落时保留原编号
         while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) items.push(lines[i++].replace(/^\s*([-*]|\d+\.)\s+/, ''));
-        out.push((ordered ? '<ol>' : '<ul>') + items.map(t => '<li>' + inline(t) + '</li>').join('') + (ordered ? '</ol>' : '</ul>'));
+        out.push((ordered ? `<ol start="${start}">` : '<ul>') + items.map(t => '<li>' + inline(t) + '</li>').join('') + (ordered ? '</ol>' : '</ul>'));
         continue;
       }
       if (/^>\s?/.test(line)) {
@@ -366,10 +377,10 @@
 
   // 背景选择只是本机观感偏好，存 localStorage；读写失败时退回“跟随 App”。
   const BG_KEY = 'ai-coop:background';
-  function applyBackground(name) {
+  function applyBackground(name, remember = true) {
     window.AICoopBackground?.set(name);
     for (const b of $('bgMenu').children) b.setAttribute('aria-checked', String(b.dataset.bg === name));
-    try { localStorage.setItem(BG_KEY, name); } catch {}
+    if (remember) { try { localStorage.setItem(BG_KEY, name); } catch {} }
   }
   const bgNames = window.AICoopBackground?.names || {plain: '纯色'};
   $('bgMenu').replaceChildren(...Object.entries(bgNames).map(([key, label]) => {
@@ -385,10 +396,12 @@
   // 默认跟随 App 的浅色/深色；旧版的“纯色”并入“跟随 App”。
   let savedBg = 'system';
   try { savedBg = localStorage.getItem(BG_KEY) || 'system'; } catch {}
-  applyBackground(bgNames[savedBg] ? savedBg : 'system');
+  const bgParam = hashParams.get('bg');
+  if (bgNames[bgParam]) applyBackground(bgParam, false);  // 地址参数只影响本次打开，不改保存的偏好
+  else applyBackground(bgNames[savedBg] ? savedBg : 'system');
 
   if (!token) { showError(new Error('面板地址缺少会话信息，请在聊天中重新打开 AI Coop。')); return; }
-  refresh();
+  refresh().then(() => { if (hashParams.get('run')) openDetail(hashParams.get('run')); });
   setInterval(() => { if (!saving) refresh(); }, 2000);
   setInterval(() => { renderNow(); renderDetailState(); }, 1000);
 })();

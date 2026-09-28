@@ -25,7 +25,7 @@ from typing import Any, Callable
 
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_VERSION = "0.11.0"
+SERVER_VERSION = "0.12.0"
 MAX_TASK_CHARS = 20_000
 MAX_CONTEXT_CHARS = 40_000
 MAX_AGENT_OUTPUT_CHARS = 40_000
@@ -154,6 +154,48 @@ def claude_rate_limits() -> dict[str, Any] | None:
 
     return {"primary": window("five_hour"), "secondary": window("seven_day"),
             "source": "claude", "observed_at": utc_now()}
+
+
+def codex_live_limits(timeout: float = 20.0) -> dict[str, Any] | None:
+    """Codex 账号的 5 小时 / 每周额度占用，实时读取（Codex CLI 的 /status 用的同一接口）。
+
+    使用 Codex 已有的登录（$CODEX_HOME/auth.json，默认 ~/.codex），只向 chatgpt.com 发 GET；
+    令牌不写日志、不转交其他进程。失败返回 None，由调用方退回读取会话日志。
+    """
+    home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    try:
+        tokens = json.loads((home / "auth.json").read_text(encoding="utf-8")).get("tokens") or {}
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not tokens.get("access_token"):
+        return None
+    import urllib.request
+    request = urllib.request.Request(
+        "https://chatgpt.com/backend-api/codex/usage",
+        headers={"Authorization": f"Bearer {tokens['access_token']}",
+                 "chatgpt-account-id": tokens.get("account_id") or "",
+                 "originator": "codex_cli_rs", "User-Agent": "codex_cli_rs"},
+    )
+    proxy = next((os.environ.get(k) for k in ("HTTPS_PROXY", "https_proxy", "ALL_PROXY") if os.environ.get(k)), None)
+    proxy = proxy or _system_proxy()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({"https": proxy} if proxy else {}))
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            payload = json.load(response)
+    except (OSError, ValueError):
+        return None
+    limits = payload.get("rate_limit") or {}
+
+    def window(key: str) -> dict[str, Any] | None:
+        value = limits.get(key) or {}
+        if value.get("used_percent") is None:
+            return None
+        return {"used_percent": value["used_percent"],
+                "window_minutes": (value.get("limit_window_seconds") or 0) // 60 or None,
+                "resets_at": value.get("reset_at")}
+
+    return {"primary": window("primary_window"), "secondary": window("secondary_window"),
+            "source": "codex-live", "observed_at": utc_now()}
 
 
 def _cli_version(path: str) -> tuple[int, ...]:
@@ -629,7 +671,11 @@ class Bridge:
             try:
                 for line in listing.read_text(encoding="utf-8", errors="replace").splitlines():
                     line = line.strip()
-                    if line and not line.startswith("#") and not Path(line).is_absolute() and ".." not in Path(line).parts:
+                    candidate = Path(line)
+                    # 自定义清单也不放行像密钥/凭据的文件，与文件清单的过滤规则一致
+                    if (line and not line.startswith("#") and not candidate.is_absolute()
+                            and ".." not in candidate.parts and not _looks_secret(candidate.name)
+                            and not {".ssh", ".aws", ".gnupg", ".git"} & set(candidate.parts)):
                         names.append(line.replace("\\", "/"))
             except OSError:
                 names = []

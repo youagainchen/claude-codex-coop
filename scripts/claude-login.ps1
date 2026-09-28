@@ -7,7 +7,13 @@ param([switch]$Status)
 
 $ErrorActionPreference = 'Stop'
 $Server = Join-Path (Split-Path -Parent $PSScriptRoot) 'server\mcp_server.py'
-$Python = if ($env:AI_COOP_PYTHON_EXE) { $env:AI_COOP_PYTHON_EXE } else { (Get-Command python.exe -ErrorAction SilentlyContinue).Source }
+$Python = $null
+if ($env:AI_COOP_PYTHON_EXE -and (Test-Path -LiteralPath $env:AI_COOP_PYTHON_EXE -PathType Leaf)) { $Python = $env:AI_COOP_PYTHON_EXE }
+if (-not $Python) { $Python = (Get-Command python.exe -ErrorAction SilentlyContinue).Source }
+if (-not $Python -and $env:USERPROFILE) {
+    $Bundled = Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+    if (Test-Path -LiteralPath $Bundled -PathType Leaf) { $Python = $Bundled }
+}
 if (-not $Python) { throw 'Python 3.10+ was not found. Install Python or set AI_COOP_PYTHON_EXE.' }
 if ($Status) { & $Python $Server --claude-status } else { & $Python $Server --claude-login }
 exit $LASTEXITCODE

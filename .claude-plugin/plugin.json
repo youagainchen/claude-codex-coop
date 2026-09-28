@@ -1,6 +1,6 @@
 {
   "name": "ai-coop",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Open once, then let Claude and Codex collaborate automatically in the native chat.",
   "author": {
     "name": "AI Coop contributors"
@@ -13,14 +13,14 @@
     "collaboration"
   ],
   "skills": "./skills/",
-  "hooks": "./hooks/hooks.json",
   "mcpServers": {
     "ai-coop": {
       "command": "python",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/server/mcp_server.py",
         "--host-agent",
-        "claude"
+        "claude",
+        "--allow-write"
       ],
       "env": {
         "AI_COOP_HOST_AGENT": "claude"

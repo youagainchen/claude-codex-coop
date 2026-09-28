@@ -59,6 +59,8 @@ def _codex_entries(event):
         message = str(item.get("message") or "")
         if "ignoring" in message and "configuration" in message:
             return []  # 启动时对 -c 覆盖项的例行提示，不是对话内容
+        if message.startswith("Reconnecting"):
+            return []  # Codex 自动重连的过程提示；重连失败会另有 turn.failed/error 事件
         return [("error", message)]
     if kind in ("turn.failed", "error"):
         return [("error", _short((event.get("error") or {}).get("message") or event.get("message"), 400))]
@@ -217,22 +219,26 @@ class PanelServer(ThreadingHTTPServer):
         self.limits = (0.0, None)
 
     def partner_limits(self, partner):
-        """对端账号额度：Codex 读会话日志里最近一次记录；Claude 调官方用量接口（缓存 60 秒）。"""
-        if partner == "codex":
-            return codex_rate_limits()
-        if partner == "claude":
-            at, value = self.limits
-            if time.monotonic() - at > 60:
-                from mcp_server import claude_rate_limits
-                value = claude_rate_limits()
-                self.limits = (time.monotonic(), value)
-            return value
-        return None
+        """对端账号额度，两边都实时读取（缓存 60 秒）。
+
+        Codex 的实时接口不可用时，退回读 Codex App 会话日志里最近一次记录——注意插件自己的调用
+        不写会话日志，所以那份数据可能是旧的，面板会注明读取时间。
+        """
+        if partner not in ("codex", "claude"):
+            return None
+        at, value = self.limits
+        if time.monotonic() - at > 60:
+            from mcp_server import claude_rate_limits, codex_live_limits
+            value = (codex_live_limits() or codex_rate_limits()) if partner == "codex" else claude_rate_limits()
+            self.limits = (time.monotonic(), value)
+        return value
 
     def state(self):
         with self.lock:
             # 模型目录（含登录状态）10 分钟刷新一次：登录、升级 CLI 或账号可用模型变化后无需重开面板。
-            if self.catalog is None or time.monotonic() - self.catalog_at > 600:
+            age = time.monotonic() - self.catalog_at
+            waiting_login = (self.catalog or {}).get("claude_login") and not self.catalog["claude_login"].get("logged_in")
+            if self.catalog is None or age > 600 or (waiting_login and age > 15):
                 self.catalog = self.bridge.get_model_catalog({
                     "workspace": str(self.workspace), "primary_agent": self.primary,
                 })
@@ -341,6 +347,16 @@ class PanelHandler(BaseHTTPRequestHandler):
                     if set(data) - {"partner_selection", "partner_model", "partner_effort"}:
                         raise ValueError("Unknown preference")
                     result = self.server.bridge.set_partner_preferences({**data, "primary_agent": self.server.primary})
+                elif self.path == "/api/claude-login":
+                    # 在新的可见终端里运行登录（需要用户在浏览器授权，必要时在终端里粘贴授权码）。
+                    server_py = Path(__file__).with_name("mcp_server.py")
+                    options = {"creationflags": subprocess.CREATE_NEW_CONSOLE} if os.name == "nt" else {}
+                    python = Path(sys.executable)
+                    if python.name.lower() == "pythonw.exe" and python.with_name("python.exe").exists():
+                        python = python.with_name("python.exe")  # pythonw 没有控制台，登录提示会看不到
+                    subprocess.Popen([str(python), str(server_py), "--claude-login"], **options)
+                    self.server.catalog = None  # 登录完成后下一次刷新重新读取登录状态
+                    result = {"started": True}
                 elif self.path == "/api/shutdown":
                     self.reply(200, {"ok": True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()

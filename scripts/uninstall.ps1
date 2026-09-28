@@ -51,7 +51,7 @@ if ($Target -in @('Codex', 'Both')) {
         & $CodexPath mcp remove ai-coop *> $null
         & $CodexPath plugin remove 'ai-coop@personal'
     }
-    $CodexPluginRoot = Join-Path $env:USERPROFILE 'pluginsi-coop'
+    $CodexPluginRoot = Join-Path $env:USERPROFILE 'plugins\ai-coop'
     if ((Test-Path -LiteralPath $CodexPluginRoot) -and $PSCmdlet.ShouldProcess($CodexPluginRoot, 'Remove Codex AI Coop copy')) {
         Remove-Item -LiteralPath $CodexPluginRoot -Recurse -Force
     }

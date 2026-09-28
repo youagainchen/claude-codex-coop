@@ -249,6 +249,21 @@ class BridgeTests(unittest.TestCase):
                 bridge.run_claude("看代码", Path(tmp))
                 self.assertEqual(run.call_args.args[0][run.call_args.args[0].index("--permission-mode") + 1], "plan")
 
+    def test_context_listing_never_includes_secret_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Path(tmp)
+            (ws / ".ai-coop-context").write_text(
+                "NOTES.md\n.env\nconfig/prod.env\nkeys/server.pem\n.ssh/config\n../outside.md\n", encoding="utf-8")
+            self.assertEqual(MODULE.Bridge._context_files(ws), ["NOTES.md"])
+
+    def test_source_files_contain_no_control_characters(self):
+        root = MODULE_PATH.parents[1]
+        for path in root.rglob("*"):
+            if path.is_file() and path.suffix in {".py", ".ps1", ".js", ".html", ".css", ".md", ".json", ".yaml"}:
+                text = path.read_text(encoding="utf-8")
+                bad = [c for c in text if ord(c) < 32 and c not in "\t\n\r"]
+                self.assertFalse(bad, f"{path.relative_to(root)} 含控制字符 {bad[:3]!r}")
+
     def test_partner_claude_not_logged_in_explains_how_to_fix(self):
         with tempfile.TemporaryDirectory() as tmp:
             bridge = self.make_bridge(Path(tmp), host_agent="codex")

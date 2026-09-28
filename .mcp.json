@@ -5,7 +5,8 @@
       "args": [
         "./server/mcp_server.py",
         "--host-agent",
-        "codex"
+        "codex",
+        "--allow-write"
       ],
       "startup_timeout_sec": 30,
       "tool_timeout_sec": 3600

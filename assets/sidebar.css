@@ -202,3 +202,5 @@ main.show-detail>section:not(#detail),main.show-detail>#bgMenu{display:none}
 .steps.live summary{color:var(--accent)}
 .hint.warn{color:var(--bad)}
 .hint code{font:11px "Cascadia Mono",Consolas,monospace;background:var(--chip);border-radius:4px;padding:1px 4px;color:var(--text)}
+.login-btn{display:block;margin-top:8px;border:0;border-radius:8px;padding:6px 12px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:12px}
+.login-btn:disabled{opacity:.7}

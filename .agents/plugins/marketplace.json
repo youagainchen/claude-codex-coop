@@ -1,0 +1,20 @@
+{
+  "name": "claude-codex-coop",
+  "interface": {
+    "displayName": "Claude-Codex-coop"
+  },
+  "plugins": [
+    {
+      "name": "ai-coop",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
