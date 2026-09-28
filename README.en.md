@@ -27,7 +27,7 @@ Keep chatting in the Claude desktop app or the Codex desktop app as usual. The A
   </tr>
 </table>
 
-> Windows 10/11 preview (macOS planned). Requires the Claude and Codex desktop apps and Python 3.10+. The panel UI is currently in Chinese. [Install](#install)
+> Preview. Tested on Windows 10/11; macOS support is experimental (script install only, not yet tested on a real Mac). Requires the Claude and Codex desktop apps and Python 3.10+. [Install](#install)
 
 ## How it differs from OpenAI's codex-plugin-cc
 
@@ -41,28 +41,33 @@ Keep chatting in the Claude desktop app or the Codex desktop app as usual. The A
 
 - **Automatic collaboration**: turn it on once; tasks that benefit from a second AI trigger it automatically, while greetings and status checks don't.
 - **Collaboration protocol**: the coordinator sends a goal, known facts, its own view, specific questions and acceptance criteria; the partner answers in one of four modes (analyze, decide, review, implement); at most two rounds per task.
-- **Side panel**: the partner's model, reasoning effort, live status, account usage and tokens used by the current call; full replies (reasoning and command steps collapsed by default); pick the model and reasoning effort for the next call; follow the app's light/dark theme or choose an animated background (aurora, galaxy, horizon).
+- **Side panel**: the partner's model, reasoning effort, live status, account usage and tokens used by the current call; full replies (reasoning and command steps collapsed by default); pick the model and reasoning effort for the next call; follow the app's light/dark theme or choose an animated background (aurora, galaxy, horizon); the UI follows your system language (English or Chinese) and can be switched in the appearance menu.
 - **Per-task permission**: analyze, decide and review are read-only; implement edits files only with your approval. Same rules on both sides.
 
 ## Install
 
-**Requirements**: Windows 10/11; Python 3.10+ runnable as `python --version` in PowerShell; the Claude and Codex desktop apps, both signed in.
+**Requirements**: Windows 10/11; Python 3.10+ runnable as `python --version` in PowerShell (Codex starts the plugin from PATH, so script installs need this too); the Claude and Codex desktop apps, both signed in.
 
 ### Option 1: plugin marketplaces (recommended)
 
-In the Claude desktop app's Code chat (or Claude Code):
-
-```text
-/plugin marketplace add youagainchen/claude-codex-coop
-/plugin install ai-coop@claude-codex-coop
-```
-
-For Codex, in PowerShell:
+For Claude, in PowerShell (the terminal and the Claude desktop app's local sessions share the same plugin settings, so one install covers both):
 
 ```powershell
-codex plugin marketplace add youagainchen/claude-codex-coop
-codex plugin add ai-coop@claude-codex-coop
+claude plugin marketplace add youagainchen/claude-codex-coop
+claude plugin install ai-coop@claude-codex-coop
 ```
+
+You can also run `/plugin marketplace add youagainchen/claude-codex-coop` in a Claude Code terminal session; once the marketplace is added, the desktop app's Code tab lists the plugin under **+ → Plugins → Add plugin**.
+
+For Codex, in PowerShell. With only the Codex desktop app, `codex` isn't on PATH, so locate the copy bundled with the app first:
+
+```powershell
+$codex = (Get-ChildItem "$env:LOCALAPPDATA\OpenAI\Codex\bin\*\codex.exe" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+& $codex plugin marketplace add youagainchen/claude-codex-coop
+& $codex plugin add ai-coop@claude-codex-coop
+```
+
+If you installed the Codex CLI separately, `codex plugin marketplace add …` and `codex plugin add …` work directly.
 
 ### Option 2: install script
 
@@ -76,6 +81,20 @@ No Git? Download and extract the ZIP from GitHub, open PowerShell in the extract
 
 - One side only: `-Target Claude` or `-Target Codex`. Prevent the partner from editing workspace files: add `-ReadOnly`.
 - Upgrade: `git pull`, then run `.\scripts\install.ps1 -Target Both` again.
+
+### macOS (experimental)
+
+Needs Python 3.10+ (`brew install python` or the python.org installer; the system `/usr/bin/python3` is usually 3.9, which is too old).
+
+```sh
+git clone https://github.com/youagainchen/claude-codex-coop.git
+cd claude-codex-coop
+sh scripts/install.sh --target both
+```
+
+- One side only: `--target claude` or `--target codex`. Prevent the partner from editing workspace files: add `--read-only`.
+- Sign in the Claude CLI: `sh scripts/claude-login.sh` (the panel's sign-in button opens a Terminal window).
+- Not yet tested on a real Mac: the locations of the CLIs bundled with the two apps are inferred from the Windows layout. If one isn't found, the install script stops with an error before changing any files; installing the Claude Code / Codex CLI separately works around it. Issues welcome.
 
 Afterwards, **fully quit and reopen** both apps.
 
@@ -97,13 +116,14 @@ Afterwards, **fully quit and reopen** both apps.
 
 ## Uninstall
 
-- Marketplace install: `/plugin uninstall ai-coop@claude-codex-coop` in Claude; `codex plugin remove ai-coop@claude-codex-coop` in PowerShell.
-- Script install: `.\scripts\uninstall.ps1 -Target Both`; add `-Purge` to also delete run records in `~/.ai-coop`.
+- Marketplace install: in PowerShell, `claude plugin uninstall ai-coop@claude-codex-coop` and `codex plugin remove ai-coop@claude-codex-coop`; with only the Codex desktop app, locate `$codex` as above and run `& $codex plugin remove ai-coop@claude-codex-coop`.
+- Script install: `.\scripts\uninstall.ps1 -Target Both`; add `-Purge` to also delete the whole `~/.ai-coop` folder (run records, preferences and plugin backups from upgrades). On macOS: `sh scripts/uninstall.sh --target both` (`--purge` likewise).
 
 ## Troubleshooting
 
-- **Calls keep failing**: run `.\scripts\doctor.ps1` and check that both `codex_exe` and `claude_exe` have paths. A `null` means that CLI wasn't found; point to it with `AI_COOP_CODEX_EXE` / `AI_COOP_CLAUDE_EXE`.
-- **Python not found**: install Python 3.10+ with "Add to PATH" checked (marketplace installs need `python` on PATH); for script installs you can also set `AI_COOP_PYTHON_EXE`.
+- **Calls keep failing**: run `.\scripts\doctor.ps1` and check that both `codex_exe` and `claude_exe` have paths. A `null` means that CLI wasn't found; point to it with `AI_COOP_CODEX_EXE` / `AI_COOP_CLAUDE_EXE`. On macOS, run `python3 server/mcp_server.py --self-test` in the repository folder instead.
+- **Python not found** (Windows): install Python 3.10+ with "Add to PATH" checked (Codex starts the plugin from PATH, so both install methods need `python` on PATH); for Claude-side script installs you can also set `AI_COOP_PYTHON_EXE`.
+- **Python not found** (macOS): the install script tries `python3.14`…`python3.10`, `python3` and the default Homebrew and python.org locations, and picks the first 3.10+; set `AI_COOP_PYTHON` to choose one. Both apps start the plugin with the interpreter chosen at install time, regardless of the app's PATH.
 
 ## How it works
 

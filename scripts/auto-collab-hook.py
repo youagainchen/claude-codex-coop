@@ -10,13 +10,8 @@ from pathlib import Path
 
 
 def preferences_path() -> Path:
-    # 与 mcp_server.default_runs_dir 保持一致（避开 MSIX 对 AppData 的重定向）。
-    if os.name == "nt":
-        return Path.home() / ".ai-coop" / "preferences.json"
-    state_home = os.environ.get("XDG_STATE_HOME")
-    if state_home:
-        return Path(state_home) / "ai-coop" / "preferences.json"
-    return Path.home() / ".local" / "state" / "ai-coop" / "preferences.json"
+    # 与 mcp_server.default_runs_dir 保持一致：各平台都在 ~/.ai-coop（Windows 上也避开 MSIX 对 AppData 的重定向）。
+    return Path.home() / ".ai-coop" / "preferences.json"
 
 
 def is_enabled() -> bool:

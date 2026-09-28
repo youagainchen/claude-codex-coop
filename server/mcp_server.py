@@ -25,7 +25,7 @@ from typing import Any, Callable
 
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_VERSION = "0.12.0"
+SERVER_VERSION = "0.13.0"
 MAX_TASK_CHARS = 20_000
 MAX_CONTEXT_CHARS = 40_000
 MAX_AGENT_OUTPUT_CHARS = 40_000
@@ -66,7 +66,16 @@ def _system_proxy() -> str | None:
     接口可能不可达或被拒绝。为协作 CLI 补上 HTTP(S)_PROXY，行为才与 App 一致。
     """
     if os.name != "nt":
-        return None
+        # macOS 上 getproxies() 读取系统网络偏好（SystemConfiguration），其他平台读环境变量。
+        import urllib.request
+        try:
+            proxies = urllib.request.getproxies()
+        except Exception:  # noqa: BLE001 - 系统代理读取失败时按直连处理
+            return None
+        server = proxies.get("https") or proxies.get("http") or ""
+        if not server:
+            return None
+        return server if "://" in server else "http://" + server
     try:
         import winreg
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
@@ -96,17 +105,60 @@ def _with_proxy(env: dict[str, str]) -> dict[str, str]:
     return env
 
 
+_KEYCHAIN_CACHE: list[Any] = [0.0, None]
+
+
+def _claude_oauth_token() -> str | None:
+    """命令行 claude 登录后留下的 OAuth 令牌：Windows/Linux 在 ~/.claude/.credentials.json，
+    macOS 在钥匙串的 “Claude Code-credentials” 项（由 security 命令读取，结果缓存 60 秒）。"""
+    raw = None
+    try:
+        raw = (Path.home() / ".claude" / ".credentials.json").read_text(encoding="utf-8")
+    except OSError:
+        if sys.platform == "darwin":
+            if time.monotonic() - _KEYCHAIN_CACHE[0] < 60:
+                raw = _KEYCHAIN_CACHE[1]
+            else:
+                try:
+                    completed = subprocess.run(
+                        ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+                        capture_output=True, text=True, timeout=5, stdin=subprocess.DEVNULL)
+                    raw = completed.stdout.strip() if completed.returncode == 0 else None
+                except (OSError, subprocess.SubprocessError):
+                    raw = None
+                _KEYCHAIN_CACHE[:] = [time.monotonic(), raw]
+    try:
+        return (json.loads(raw or "{}").get("claudeAiOauth") or {}).get("accessToken") or None
+    except (ValueError, AttributeError):
+        return None
+
+
+def _extend_posix_path() -> None:
+    """macOS 的图形界面程序（Claude/Codex App）启动的进程只有 /usr/bin:/bin 这类最短 PATH，
+    Homebrew、npm 与官方安装脚本放 CLI 的目录都不在其中；npm 装的 codex 还要靠 PATH 找 node。
+    启动时把这些常见目录补到末尾，查找 CLI 与启动子进程都能用上。Windows 不处理。"""
+    if os.name == "nt":
+        return
+    home = Path.home()
+    extra = [home / ".local" / "bin", home / ".claude" / "local", home / ".npm-global" / "bin",
+             home / ".volta" / "bin", home / ".bun" / "bin", Path("/opt/homebrew/bin"), Path("/usr/local/bin")]
+    nvm = sorted((home / ".nvm" / "versions" / "node").glob("*/bin"), reverse=True)
+    current = os.environ.get("PATH", "").split(os.pathsep)
+    added = [str(d) for d in [*extra, *nvm[:1]] if d.is_dir() and str(d) not in current]
+    if added:
+        os.environ["PATH"] = os.pathsep.join([*filter(None, current), *added])
+
+
+_extend_posix_path()
+
+
 def _claude_oauth_get(path: str, timeout: float = 15.0) -> Any:
     """用命令行 claude auth login 留下的凭证 GET 官方接口（模型列表、账号用量）。
 
     令牌只在本进程内读取并直接发往 api.anthropic.com，不写日志、不转交其他进程；
     失败（未登录、令牌过期、网络不通）返回 None。
     """
-    try:
-        cred = json.loads((Path.home() / ".claude" / ".credentials.json").read_text(encoding="utf-8"))
-        token = (cred.get("claudeAiOauth") or {}).get("accessToken")
-    except (OSError, ValueError, AttributeError):
-        return None
+    token = _claude_oauth_token()
     if not token:
         return None
     import urllib.request
@@ -196,6 +248,21 @@ def codex_live_limits(timeout: float = 20.0) -> dict[str, Any] | None:
 
     return {"primary": window("primary_window"), "secondary": window("secondary_window"),
             "source": "codex-live", "observed_at": utc_now()}
+
+
+def _mac_app_clis(name: str) -> list[Path]:
+    """macOS 上两个桌面 App 自带的 CLI（路径按 Windows 版的布局推断，尚未在真机核实）。"""
+    home = Path.home()
+    if name == "codex":
+        patterns = [(Path("/Applications/Codex.app/Contents/Resources"), "codex"),
+                    (home / "Applications" / "Codex.app" / "Contents" / "Resources", "codex")]
+    else:
+        patterns = [(home / "Library" / "Application Support" / "Claude" / "claude-code", "*/claude")]
+    found: list[Path] = []
+    for root, pattern in patterns:
+        if root.is_dir():
+            found.extend(p for p in root.glob(pattern) if p.is_file() and os.access(p, os.X_OK))
+    return found
 
 
 def _cli_version(path: str) -> tuple[int, ...]:
@@ -384,12 +451,8 @@ def default_runs_dir() -> Path:
     # 不放在 %LOCALAPPDATA%：MSIX 打包的宿主（Claude 桌面版）会把 AppData 下新建的文件
     # 重定向到包内虚拟目录，临时文件与目标文件落在不同盘，replace 报 WinError 17；
     # 两个宿主也会各看到一份不同的记录。用户主目录不受重定向影响。
-    if os.name == "nt":
-        return Path.home() / ".ai-coop" / "runs"
-    state_home = os.environ.get("XDG_STATE_HOME")
-    if state_home:
-        return Path(state_home) / "ai-coop" / "runs"
-    return Path.home() / ".local" / "state" / "ai-coop" / "runs"
+    # 各平台统一用 ~/.ai-coop，与自动协作钩子、卸载脚本和 README 一致。
+    return Path.home() / ".ai-coop" / "runs"
 
 
 def replace_file(temp: Path, target: Path) -> None:
@@ -502,9 +565,11 @@ class Bridge:
             return found
 
         # GUI hosts often start with a reduced PATH. Discover the CLIs from
-        # their standard Windows install locations without opening a terminal.
+        # their standard install locations without opening a terminal.
         candidates: list[Path] = []
-        if fallback == "codex":
+        if sys.platform == "darwin":
+            candidates.extend(_mac_app_clis(fallback))
+        elif fallback == "codex":
             local_app_data = os.environ.get("LOCALAPPDATA")
             if local_app_data:
                 bin_root = Path(local_app_data) / "OpenAI" / "Codex" / "bin"
@@ -520,7 +585,7 @@ class Bridge:
         return str(max(existing, key=lambda path: path.stat().st_mtime).resolve())
 
     def _newest_claude(self) -> str | None:
-        """在 PATH、System32 与 Claude App 自带的 Claude Code 里选版本最高的一个。
+        """在 PATH、System32 与 Claude App 自带的 Claude Code（macOS 在 Application Support 下）里选版本最高的一个。
 
         旧版 CLI 会把 opus/sonnet 别名解析到旧型号；Claude App 会自动更新它自带的那份，
         通常最新。App 自带版本的版本号直接取目录名，其余调用一次 --version（结果缓存 10 分钟）。
@@ -535,13 +600,13 @@ class Bridge:
         windows_dir = os.environ.get("WINDIR")
         if windows_dir and (Path(windows_dir) / "System32" / "claude.exe").is_file():
             found.setdefault(str((Path(windows_dir) / "System32" / "claude.exe").resolve()), ())
-        roots = []
+        roots = [Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"] if sys.platform == "darwin" else []
         if os.environ.get("APPDATA"):
             roots.append(Path(os.environ["APPDATA"]) / "Claude" / "claude-code")
         if os.environ.get("LOCALAPPDATA"):
             roots.extend(Path(os.environ["LOCALAPPDATA"], "Packages").glob("Claude_*/LocalCache/Roaming/Claude/claude-code"))
         for root in roots:
-            for exe in root.glob("*/claude.exe"):
+            for exe in root.glob("*/claude.exe" if os.name == "nt" else "*/claude"):
                 match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", exe.parent.name)
                 if match and exe.is_file():
                     found[str(exe.resolve())] = tuple(int(x) for x in match.groups())

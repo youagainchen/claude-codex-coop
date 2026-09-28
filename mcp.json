@@ -7,7 +7,8 @@
       "args": [
         "./server/mcp_server.py",
         "--host-agent",
-        "codex"
+        "codex",
+        "--allow-write"
       ]
     }
   }

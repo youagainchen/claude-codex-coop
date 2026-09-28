@@ -13,6 +13,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import re
+import shlex
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, build_opener, ProxyHandler
 
@@ -350,11 +351,20 @@ class PanelHandler(BaseHTTPRequestHandler):
                 elif self.path == "/api/claude-login":
                     # 在新的可见终端里运行登录（需要用户在浏览器授权，必要时在终端里粘贴授权码）。
                     server_py = Path(__file__).with_name("mcp_server.py")
-                    options = {"creationflags": subprocess.CREATE_NEW_CONSOLE} if os.name == "nt" else {}
                     python = Path(sys.executable)
                     if python.name.lower() == "pythonw.exe" and python.with_name("python.exe").exists():
                         python = python.with_name("python.exe")  # pythonw 没有控制台，登录提示会看不到
-                    subprocess.Popen([str(python), str(server_py), "--claude-login"], **options)
+                    command = [str(python), str(server_py), "--claude-login"]
+                    if os.name == "nt":
+                        subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                    elif sys.platform == "darwin":
+                        # 面板进程没有终端：交给“终端”App 打开一个可见窗口运行登录。
+                        script = " ".join(shlex.quote(part) for part in command)
+                        script = script.replace("\\", "\\\\").replace('"', '\\"')
+                        subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{script}"',
+                                          "-e", 'tell application "Terminal" to activate'])
+                    else:
+                        raise ValueError("请在终端运行：" + " ".join(shlex.quote(part) for part in command))
                     self.server.catalog = None  # 登录完成后下一次刷新重新读取登录状态
                     result = {"started": True}
                 elif self.path == "/api/shutdown":

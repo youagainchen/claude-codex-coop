@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -23,6 +24,43 @@ class BridgeTests(unittest.TestCase):
                 patch.object(MODULE.os, "name", "nt"):
             path = MODULE.default_runs_dir()
         self.assertEqual(path, Path(r"C:\Users\tester") / ".ai-coop" / "runs")
+
+    def test_runs_directory_is_home_ai_coop_on_every_platform(self):
+        with patch.object(MODULE.Path, "home", return_value=Path("/Users/tester")):
+            self.assertEqual(MODULE.default_runs_dir(), Path("/Users/tester") / ".ai-coop" / "runs")
+
+    def test_posix_proxy_comes_from_system_settings(self):
+        # 只替换模块里的 os 引用：在 Windows 上改全局 os.name 会让 pathlib 失效。
+        posix = SimpleNamespace(name="posix")
+        with patch.object(MODULE, "os", posix), \
+                patch("urllib.request.getproxies", return_value={"https": "127.0.0.1:7890"}):
+            self.assertEqual(MODULE._system_proxy(), "http://127.0.0.1:7890")
+        with patch.object(MODULE, "os", posix), patch("urllib.request.getproxies", return_value={}):
+            self.assertIsNone(MODULE._system_proxy())
+
+    def test_macos_reads_claude_token_from_keychain_when_file_missing(self):
+        secret = json.dumps({"claudeAiOauth": {"accessToken": "tok-123"}})
+        completed = subprocess.CompletedProcess(["security"], 0, stdout=secret + "\n", stderr="")
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(MODULE.Path, "home", return_value=Path(tmp)), \
+                patch.object(MODULE.sys, "platform", "darwin"), \
+                patch.object(MODULE, "_KEYCHAIN_CACHE", [0.0, None]), \
+                patch.object(MODULE.subprocess, "run", return_value=completed) as run:
+            self.assertEqual(MODULE._claude_oauth_token(), "tok-123")
+            self.assertEqual(MODULE._claude_oauth_token(), "tok-123")  # 60 秒内走缓存
+            self.assertEqual(run.call_count, 1)
+            self.assertIn("Claude Code-credentials", run.call_args[0][0])
+
+    def test_posix_path_gains_common_cli_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".local" / "bin").mkdir(parents=True)
+            fake_os = SimpleNamespace(name="posix", pathsep=":", environ={"PATH": "/usr/bin:/bin"}, access=os.access, X_OK=os.X_OK)
+            with patch.object(MODULE, "os", fake_os), \
+                    patch.object(MODULE.Path, "home", return_value=Path(tmp)):
+                MODULE._extend_posix_path()
+        path = fake_os.environ["PATH"]
+        self.assertTrue(path.startswith("/usr/bin:/bin:"), path)  # 原有目录保持在前
+        self.assertTrue(path.endswith(":" + str(Path(tmp) / ".local" / "bin")), path)
 
     def make_bridge(self, root: Path, allow_write: bool = False, host_agent: str = "codex"):
         return MODULE.Bridge(

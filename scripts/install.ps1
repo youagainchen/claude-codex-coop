@@ -93,6 +93,15 @@ function Write-HostPluginConfig(
         }
     }
     Write-Utf8NoBom (Join-Path $PluginRoot '.mcp.json') ($Mcp | ConvertTo-Json -Depth 20)
+    # Codex 实际读取插件根目录的 mcp.json（agent-plugins 格式）。实测 Codex 0.158：缺 $schema 或 command
+    # 写成绝对路径时整份文件被忽略，所以这里只能用 PATH 上的 python，只按 -ReadOnly 决定是否加 --allow-write。
+    $PluginArgs = @('./server/mcp_server.py', '--host-agent', $HostAgent)
+    if (-not $ReadOnly) { $PluginArgs += '--allow-write' }
+    $PluginMcp = [ordered]@{
+        '$schema' = 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json'
+        mcpServers = [ordered]@{ 'ai-coop' = [ordered]@{ type = 'stdio'; command = 'python'; args = $PluginArgs } }
+    }
+    Write-Utf8NoBom (Join-Path $PluginRoot 'mcp.json') ($PluginMcp | ConvertTo-Json -Depth 20)
 
     if ($HostAgent -eq 'claude') {
         # Claude 插件清单内嵌 MCP 配置（${CLAUDE_PLUGIN_ROOT} 由 Claude Code 展开），同步为本机解析出的 Python。

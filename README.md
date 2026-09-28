@@ -27,7 +27,7 @@
   </tr>
 </table>
 
-> 预览版，目前仅支持 Windows 10/11，macOS 版计划中。
+> 预览版。Windows 10/11 已实测；macOS 为实验性支持（仅脚本安装，尚未在真机验证）。
 
 ## 和官方 codex-plugin-cc 有什么不同
 
@@ -41,28 +41,33 @@
 
 - **自动协作**：打开一次，之后值得协作的任务会自动调用另一边；问候、状态查询等不会触发。
 - **协作协议**：主协调独立判断后，把目标、已知、初判、具体问题、验收标准交给对方；对方按分析、决策、审查、实施四种模式交付；每个任务最多两轮。
-- **侧边面板**：对方的模型、推理强度、实时状态、账号额度与本轮 token；完整回复（思考过程与命令步骤默认折叠）；手动指定下一次调用的模型与推理强度；背景可跟随 App 浅色/深色，或选择极光、星河、地平线动态背景。
+- **侧边面板**：对方的模型、推理强度、实时状态、账号额度与本轮 token；完整回复（思考过程与命令步骤默认折叠）；手动指定下一次调用的模型与推理强度；背景可跟随 App 浅色/深色，或选择极光、星河、地平线动态背景；界面中英文随系统语言，也可在外观菜单切换。
 - **按任务授权**：分析、决策、审查只读；实施任务按你给出的授权修改文件，两边规则相同。
 
 ## 安装
 
-**前提**：Windows 10/11；Python 3.10+，并且在 PowerShell 里能运行 `python --version`；已登录的 Claude 桌面版与 Codex 桌面版。
+**前提**：Windows 10/11；Python 3.10+，并且在 PowerShell 里能运行 `python --version`（Codex 只从 PATH 启动插件，脚本安装也需要）；已登录的 Claude 桌面版与 Codex 桌面版。
 
 ### 方式一：插件市场（推荐）
 
-在 Claude 桌面版的 Code 对话框（或 Claude Code）中输入：
-
-```text
-/plugin marketplace add youagainchen/claude-codex-coop
-/plugin install ai-coop@claude-codex-coop
-```
-
-在 PowerShell 中为 Codex 安装：
+在 PowerShell 中为 Claude 安装（终端与 Claude 桌面版的本地会话共用同一份插件设置，装一次两边都能用）：
 
 ```powershell
-codex plugin marketplace add youagainchen/claude-codex-coop
-codex plugin add ai-coop@claude-codex-coop
+claude plugin marketplace add youagainchen/claude-codex-coop
+claude plugin install ai-coop@claude-codex-coop
 ```
+
+也可以在 Claude Code 终端会话里输入 `/plugin marketplace add youagainchen/claude-codex-coop`；添加之后，在桌面版 Code 标签页点输入框旁的 **+ → Plugins → Add plugin** 也能找到并安装它。
+
+在 PowerShell 中为 Codex 安装。只装了 Codex 桌面版时 `codex` 不在 PATH 里，先定位 App 自带的那一份：
+
+```powershell
+$codex = (Get-ChildItem "$env:LOCALAPPDATA\OpenAI\Codex\bin\*\codex.exe" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+& $codex plugin marketplace add youagainchen/claude-codex-coop
+& $codex plugin add ai-coop@claude-codex-coop
+```
+
+已单独安装 Codex CLI 的话，直接运行 `codex plugin marketplace add …` 和 `codex plugin add …` 即可。
 
 ### 方式二：安装脚本
 
@@ -76,6 +81,20 @@ cd claude-codex-coop
 
 - 只装一边：`-Target Claude` 或 `-Target Codex`；禁止协作方修改工作区文件：加 `-ReadOnly`。
 - 升级：`git pull` 后再次运行 `.\scripts\install.ps1 -Target Both`。
+
+### macOS（实验性）
+
+需要 Python 3.10+（`brew install python` 或 python.org 安装包；系统自带的 `/usr/bin/python3` 通常是 3.9，版本不够）。
+
+```sh
+git clone https://github.com/youagainchen/claude-codex-coop.git
+cd claude-codex-coop
+sh scripts/install.sh --target both
+```
+
+- 只装一边：`--target claude` 或 `--target codex`；禁止协作方修改工作区文件：加 `--read-only`。
+- 登录 Claude CLI：`sh scripts/claude-login.sh`（面板里的登录按钮会打开“终端”窗口）。
+- 尚未在真机验证：两个 App 自带 CLI 的位置是按 Windows 版推断的，找不到时安装脚本会直接报错退出，不改动任何文件；可以先单独安装 Claude Code / Codex CLI。遇到问题欢迎提 issue。
 
 安装后**完全退出并重新打开**两个 App。
 
@@ -97,13 +116,14 @@ cd claude-codex-coop
 
 ## 卸载
 
-- 插件市场安装：在 Claude 中 `/plugin uninstall ai-coop@claude-codex-coop`；在 PowerShell 中 `codex plugin remove ai-coop@claude-codex-coop`。
-- 脚本安装：`.\scripts\uninstall.ps1 -Target Both`，加 `-Purge` 会同时删除 `~/.ai-coop` 里的运行记录。
+- 插件市场安装：在 PowerShell 中运行 `claude plugin uninstall ai-coop@claude-codex-coop` 和 `codex plugin remove ai-coop@claude-codex-coop`；只装了 Codex 桌面版时，先按上面的方法定位 `$codex`，再运行 `& $codex plugin remove ai-coop@claude-codex-coop`。
+- 脚本安装：`.\scripts\uninstall.ps1 -Target Both`，加 `-Purge` 会同时删除 `~/.ai-coop` 整个目录（运行记录、偏好和升级时留下的插件备份）；macOS 用 `sh scripts/uninstall.sh --target both`（`--purge` 同理）。
 
 ## 常见问题
 
-- **协作一直失败**：运行 `.\scripts\doctor.ps1`，确认输出中的 `codex_exe` 和 `claude_exe` 都有路径；任一为 `null` 表示没找到对应的 CLI，可用环境变量 `AI_COOP_CODEX_EXE` / `AI_COOP_CLAUDE_EXE` 指定。
-- **找不到 Python**：安装 Python 3.10+ 并勾选加入 PATH（插件市场安装要求 PATH 上有 `python`）；脚本安装也可以用环境变量 `AI_COOP_PYTHON_EXE` 指定解释器。
+- **协作一直失败**：运行 `.\scripts\doctor.ps1`，确认输出中的 `codex_exe` 和 `claude_exe` 都有路径；任一为 `null` 表示没找到对应的 CLI，可用环境变量 `AI_COOP_CODEX_EXE` / `AI_COOP_CLAUDE_EXE` 指定。macOS 上改为在仓库目录运行 `python3 server/mcp_server.py --self-test`。
+- **找不到 Python**（Windows）：安装 Python 3.10+ 并勾选加入 PATH（Codex 只从 PATH 启动插件，两种安装方式都要求 PATH 上有 `python`）；Claude 一侧的脚本安装也可以用环境变量 `AI_COOP_PYTHON_EXE` 指定解释器。
+- **找不到 Python**（macOS）：安装脚本会依次尝试 `python3.14`…`python3.10`、`python3` 和 Homebrew、python.org 的默认位置，选第一个 3.10+；也可以用环境变量 `AI_COOP_PYTHON` 指定。两个 App 都用这个安装时选定的解释器启动插件，与 App 的 PATH 无关。
 
 ## 工作原理
 
