@@ -25,7 +25,7 @@ from typing import Any, Callable
 
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_VERSION = "0.13.0"
+SERVER_VERSION = "0.13.1"
 MAX_TASK_CHARS = 20_000
 MAX_CONTEXT_CHARS = 40_000
 MAX_AGENT_OUTPUT_CHARS = 40_000
@@ -250,14 +250,20 @@ def codex_live_limits(timeout: float = 20.0) -> dict[str, Any] | None:
             "source": "codex-live", "observed_at": utc_now()}
 
 
+# Claude 桌面版把自带的 Claude Code 放在 claude-code/<版本号>/ 下。macOS 上是一个 .app 包
+# （anthropics/claude-code#90748 报告的实际路径），而不是直接的 claude 可执行文件。
+CLAUDE_APP_EXES = ("*/claude.exe",) if os.name == "nt" else ("*/claude", "*/claude.app/Contents/MacOS/claude")
+
+
 def _mac_app_clis(name: str) -> list[Path]:
-    """macOS 上两个桌面 App 自带的 CLI（路径按 Windows 版的布局推断，尚未在真机核实）。"""
+    """macOS 上两个桌面 App 自带的 CLI。Claude 的路径有用户报告为据；Codex 的尚未在真机核实。"""
     home = Path.home()
     if name == "codex":
         patterns = [(Path("/Applications/Codex.app/Contents/Resources"), "codex"),
                     (home / "Applications" / "Codex.app" / "Contents" / "Resources", "codex")]
     else:
-        patterns = [(home / "Library" / "Application Support" / "Claude" / "claude-code", "*/claude")]
+        root = home / "Library" / "Application Support" / "Claude" / "claude-code"
+        patterns = [(root, pattern) for pattern in CLAUDE_APP_EXES]
     found: list[Path] = []
     for root, pattern in patterns:
         if root.is_dir():
@@ -606,8 +612,9 @@ class Bridge:
         if os.environ.get("LOCALAPPDATA"):
             roots.extend(Path(os.environ["LOCALAPPDATA"], "Packages").glob("Claude_*/LocalCache/Roaming/Claude/claude-code"))
         for root in roots:
-            for exe in root.glob("*/claude.exe" if os.name == "nt" else "*/claude"):
-                match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", exe.parent.name)
+            for exe in (e for pattern in CLAUDE_APP_EXES for e in root.glob(pattern)):
+                # 版本号取 claude-code/ 下第一层目录名（macOS 上 exe 还在 claude.app 包里面几层）
+                match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", exe.relative_to(root).parts[0])
                 if match and exe.is_file():
                     found[str(exe.resolve())] = tuple(int(x) for x in match.groups())
         for path, version in list(found.items()):

@@ -62,6 +62,27 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(path.startswith("/usr/bin:/bin:"), path)  # 原有目录保持在前
         self.assertTrue(path.endswith(":" + str(Path(tmp) / ".local" / "bin")), path)
 
+    def test_macos_finds_claude_inside_desktop_app_bundle(self):
+        # anthropics/claude-code#90748: claude-code/<版本号>/claude.app/Contents/MacOS/claude
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "Library" / "Application Support" / "Claude" / "claude-code"
+            for version in ("2.1.247", "2.1.300"):
+                exe = root / version / "claude.app" / "Contents" / "MacOS" / "claude"
+                exe.parent.mkdir(parents=True)
+                exe.write_text("#!/bin/sh\n")
+            posix_exes = ("*/claude", "*/claude.app/Contents/MacOS/claude")
+            with patch.object(MODULE.Path, "home", return_value=Path(tmp)), \
+                    patch.object(MODULE.sys, "platform", "darwin"), \
+                    patch.object(MODULE, "CLAUDE_APP_EXES", posix_exes), \
+                    patch.object(MODULE.shutil, "which", return_value=None), \
+                    patch.dict(MODULE.os.environ, {}, clear=True), \
+                    patch.object(MODULE, "_cli_version", side_effect=AssertionError("version comes from the folder")):
+                self.assertEqual(len(MODULE._mac_app_clis("claude")), 2)
+                bridge = self.make_bridge(Path(tmp))
+                newest = bridge._newest_claude()
+        self.assertIn("2.1.300", newest)
+        self.assertTrue(newest.endswith(str(Path("claude.app") / "Contents" / "MacOS" / "claude")))
+
     def make_bridge(self, root: Path, allow_write: bool = False, host_agent: str = "codex"):
         return MODULE.Bridge(
             root=root,

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -138,7 +139,10 @@ def install_codex(python: str, read_only: bool, codex: str) -> None:
             "name": "ai-coop", "source": {"source": "local", "path": "./plugins/ai-coop"},
             "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"})
     write_json(CODEX_MARKETPLACE, marketplace, backup=True)
-    # 旧版把服务直接写进 config.toml；现在由插件自带，去掉旧条目以免工具重复。
+    # 旧版把服务直接写进 config.toml；现在由插件自带，去掉旧条目以免工具重复（有旧条目时先备份）。
+    codex_config = Path(os.environ.get("CODEX_HOME") or HOME / ".codex") / "config.toml"
+    if codex_config.is_file() and "[mcp_servers.ai-coop" in codex_config.read_text(encoding="utf-8", errors="replace"):
+        shutil.copy2(codex_config, codex_config.with_name(f"config.toml.backup-{STAMP}"))
     subprocess.call([codex, "mcp", "remove", "ai-coop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if subprocess.call([codex, "plugin", "add", "ai-coop@personal"]) != 0:
         raise SystemExit("Codex plugin installation failed.")

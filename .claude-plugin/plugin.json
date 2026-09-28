@@ -1,6 +1,6 @@
 {
   "name": "ai-coop",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Open once, then let Claude and Codex collaborate automatically in the native chat.",
   "author": {
     "name": "AI Coop contributors"

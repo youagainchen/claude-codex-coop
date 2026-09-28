@@ -200,7 +200,12 @@ function Ensure-PersonalCodexMarketplace([string]$PluginRoot) {
     $CodexPath = Resolve-AgentCli 'codex'
     # Older builds registered the bridge directly in config.toml. The plugin now
     # owns the MCP server, so keep only the plugin copy to avoid duplicate tools
-    # and stale write permissions.
+    # and stale write permissions. Back up config.toml first when it holds that entry.
+    $CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+    $CodexConfig = Join-Path $CodexHome 'config.toml'
+    if ((Test-Path -LiteralPath $CodexConfig) -and (Select-String -LiteralPath $CodexConfig -SimpleMatch '[mcp_servers.ai-coop' -Quiet)) {
+        Copy-Item -LiteralPath $CodexConfig -Destination "$CodexConfig.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    }
     & $CodexPath mcp remove ai-coop *> $null
     & $CodexPath plugin add 'ai-coop@personal'
     if ($LASTEXITCODE -ne 0) { throw 'Codex plugin installation failed.' }

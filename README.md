@@ -2,6 +2,12 @@
 
 [English](README.en.md) · 中文
 
+<p align="center">
+  <img src="docs/panel-demo.gif" width="360" alt="侧边面板实录：Claude 调用 Codex 审查安装脚本，面板实时显示模型、计时、额度与 Codex 的每一步和最终结论">
+  <br>
+  <sub>一次真实调用：Codex 审查 macOS 安装脚本，找出了一个真问题（已在 v0.13.1 修复）</sub>
+</p>
+
 **你是否也遇到过这些情况？**
 
 - 一个 AI 说得头头是道，你却拿不准它是不是在"一本正经地胡说"；
@@ -94,7 +100,7 @@ sh scripts/install.sh --target both
 
 - 只装一边：`--target claude` 或 `--target codex`；禁止协作方修改工作区文件：加 `--read-only`。
 - 登录 Claude CLI：`sh scripts/claude-login.sh`（面板里的登录按钮会打开“终端”窗口）。
-- 尚未在真机验证：两个 App 自带 CLI 的位置是按 Windows 版推断的，找不到时安装脚本会直接报错退出，不改动任何文件；可以先单独安装 Claude Code / Codex CLI。遇到问题欢迎提 issue。
+- 尚未在真机验证：Claude 桌面版自带 CLI 的位置依据用户报告，Codex 桌面版的是按 Windows 版推断的；找不到时安装脚本会直接报错退出，不改动任何文件；可以先单独安装 Claude Code / Codex CLI。遇到问题欢迎提 issue。
 
 安装后**完全退出并重新打开**两个 App。
 

@@ -2,6 +2,12 @@
 
 English · [中文](README.md)
 
+<p align="center">
+  <img src="docs/panel-demo.gif" width="360" alt="Side panel recording: Claude calls Codex to review the install script; the panel shows the model, timer, usage, each step Codex takes and its final findings">
+  <br>
+  <sub>A real call: Codex reviews the macOS install script and finds a real bug (fixed in v0.13.1)</sub>
+</p>
+
 **Sound familiar?**
 
 - An AI gives you a confident, well-argued answer, and you can't tell whether it's right or just hallucinating;
@@ -94,7 +100,7 @@ sh scripts/install.sh --target both
 
 - One side only: `--target claude` or `--target codex`. Prevent the partner from editing workspace files: add `--read-only`.
 - Sign in the Claude CLI: `sh scripts/claude-login.sh` (the panel's sign-in button opens a Terminal window).
-- Not yet tested on a real Mac: the locations of the CLIs bundled with the two apps are inferred from the Windows layout. If one isn't found, the install script stops with an error before changing any files; installing the Claude Code / Codex CLI separately works around it. Issues welcome.
+- Not yet tested on a real Mac: the location of the CLI bundled with the Claude app comes from a user report, and the Codex app's is inferred from the Windows layout. If one isn't found, the install script stops with an error before changing any files; installing the Claude Code / Codex CLI separately works around it. Issues welcome.
 
 Afterwards, **fully quit and reopen** both apps.
 

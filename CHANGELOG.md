@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.1 — 2026-09-28
+
+- 修复（macOS）：Claude 桌面版自带的 Claude Code 在 `claude-code/<版本号>/claude.app/Contents/MacOS/claude`（据 anthropics/claude-code#90748），原先只找 `<版本号>/claude`，只装桌面版时安装脚本会报找不到 CLI。版本号改从 `claude-code/` 下第一层目录读取。
+- 安装脚本删除旧版写入 Codex `config.toml` 的 ai-coop 条目前，先备份该文件（Windows 与 macOS）。
+- README 开头加入面板实录动图。
+
 ## v0.13.0 — 2026-09-28
 
 - 面板支持英文界面：默认随系统语言（中文系统显示中文，其余英文），可在外观菜单切换并记住选择，也可用地址参数 `&lang=en` / `&lang=zh` 指定；插件自带的路由说明、步骤前缀与报错一并译出；切换语言不会丢失未保存的模型选择。
