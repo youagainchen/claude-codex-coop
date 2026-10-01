@@ -135,6 +135,28 @@ sh scripts/install.sh --target both
 
 插件是一个本地 MCP 服务（`server/mcp_server.py`，只依赖 Python 标准库）：主协调调用 `start_workflow` 后，服务在后台启动另一边的 CLI（`codex exec --json` 或 `claude -p --output-format stream-json`），事件实时写入面板，结束后结果交回主协调。调用 Claude 时固定使用 Claude CLI 登录的账号。面板（`server/sidebar.py`）只监听 `127.0.0.1`，端口随机，每次启动生成一个访问令牌。
 
+### MCP 工具
+
+服务通过 `tools/list` 提供以下 15 个工具。只有 `start_codex_implementation` 和 implement 模式的 `start_workflow` 会修改项目文件，两者都要求提供已批准的决策，且服务需启用 `--allow-write`；`start_*` 会在后台启动另一边的 CLI。
+
+| 工具 | 用途 | 修改项目 |
+|---|---|---|
+| `health_check` | 检查 Codex/Claude CLI、工作区、运行目录和写入模式，不启动模型 | 否 |
+| `get_model_catalog` | 识别主对话 AI，读取协作方的候选模型、推理强度和已保存设置 | 否 |
+| `show_partner_selector` | 在对话中显示协作 AI 模型与推理强度选择条 | 否 |
+| `open_sidebar` | 准备本地协作面板并返回 URL（本身不打开面板） | 否 |
+| `set_collaboration_mode` | 打开或关闭自动协作 | 否 |
+| `set_partner_preferences` | 保存协作方的选模方式、模型和推理强度 | 否 |
+| `start_workflow` | 把本轮任务交给另一边 AI（analyze / decide / review / implement） | 仅 implement 模式 |
+| `start_consultation` | 后台启动一次 Codex 或 Claude 的只读咨询 | 否 |
+| `start_model_debate` | Claude 与 Codex 各出方案、交叉质询、按证据裁决 | 否 |
+| `start_codex_implementation` | 按用户已批准的决策让 Codex 修改并验证 | 是 |
+| `get_run_status` | 查询后台任务状态，完成后返回报告 | 否 |
+| `list_runs` | 列出最近的运行记录 | 否 |
+| `get_usage_summary` | 读取单次或最近多次运行的 token 与费用统计 | 否 |
+| `project_status` | 读取 Git 状态和差异统计 | 否 |
+| `read_project_file` | 读取工作区内的 UTF-8 文本文件，禁止越界访问 | 否 |
+
 开发测试：`python -m unittest discover -s tests`
 
 ## 许可

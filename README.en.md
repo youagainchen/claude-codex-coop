@@ -135,6 +135,28 @@ Afterwards, **fully quit and reopen** both apps.
 
 The plugin is a local MCP server (`server/mcp_server.py`, Python standard library only). When the coordinator calls `start_workflow`, the server runs the other side's CLI in the background (`codex exec --json` or `claude -p --output-format stream-json`), streams its events to the panel, and hands the result back to the coordinator. Calls to Claude always use the account signed in to the Claude CLI. The panel (`server/sidebar.py`) listens on `127.0.0.1` only, on a random port with a per-session token.
 
+### MCP tools
+
+The server exposes these 15 tools via `tools/list`. Only `start_codex_implementation` and `start_workflow` in implement mode modify project files; both require an approved decision and a server started with `--allow-write`; the `start_*` tools run the other side's CLI in the background.
+
+| Tool | Purpose | Modifies project |
+|---|---|---|
+| `health_check` | Check the Codex/Claude CLIs, workspace, run directory and write mode; starts no model | No |
+| `get_model_catalog` | Detect the host AI and read the partner's available models, efforts and saved settings | No |
+| `show_partner_selector` | Show a compact partner model / effort picker in the chat | No |
+| `open_sidebar` | Prepare the local collaboration panel and return its URL (does not open it) | No |
+| `set_collaboration_mode` | Turn automatic collaboration on or off | No |
+| `set_partner_preferences` | Save the partner's selection mode, model and effort | No |
+| `start_workflow` | Hand this round to the other AI (analyze / decide / review / implement) | Only in implement mode |
+| `start_consultation` | Run a background read-only consultation with Codex or Claude | No |
+| `start_model_debate` | Independent proposals from Claude and Codex, cross-examination, evidence-based verdict | No |
+| `start_codex_implementation` | Have Codex apply and verify a user-approved decision | Yes |
+| `get_run_status` | Check a background run; returns the report when done | No |
+| `list_runs` | List recent runs | No |
+| `get_usage_summary` | Token and cost stats for one run or recent runs | No |
+| `project_status` | Read Git status and diff stats | No |
+| `read_project_file` | Read a UTF-8 text file inside the workspace; paths outside it are refused | No |
+
 Run the tests with `python -m unittest discover -s tests`.
 
 ## License
