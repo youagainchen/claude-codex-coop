@@ -2,6 +2,8 @@
 
 [English](README.en.md) · 中文
 
+[![Claude-Codex-coop on Glama](https://glama.ai/mcp/servers/youagainchen/claude-codex-coop/badges/score.svg)](https://glama.ai/mcp/servers/youagainchen/claude-codex-coop)
+
 <p align="center">
   <img src="docs/panel-demo.gif" width="360" alt="侧边面板实录：Claude 调用 Codex 审查安装脚本，面板实时显示模型、计时、额度与 Codex 的每一步和最终结论">
   <br>
