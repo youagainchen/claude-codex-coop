@@ -2,6 +2,8 @@
 
 English · [中文](README.md)
 
+[![Claude-Codex-coop on Glama](https://glama.ai/mcp/servers/youagainchen/claude-codex-coop/badges/score.svg)](https://glama.ai/mcp/servers/youagainchen/claude-codex-coop)
+
 <p align="center">
   <img src="docs/panel-demo.gif" width="360" alt="Side panel recording: Claude calls Codex to review the install script; the panel shows the model, timer, usage, each step Codex takes and its final findings">
   <br>
